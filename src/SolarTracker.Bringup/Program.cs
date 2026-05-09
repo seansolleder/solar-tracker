@@ -14,6 +14,10 @@ namespace SolarTracker.Bringup
     // breaks deploy or whether it's our runtime calls that crash the device.
     public class Program
     {
+        // Bump this on every commit so we can confirm the device is running
+        // the latest pushed code (vs a stale cached build).
+        private const string Version = "ref-test-v1";
+
         public static void Main()
         {
             // One concrete reference per assembly to defeat tree-shaking.
@@ -23,11 +27,13 @@ namespace SolarTracker.Bringup
             // I2c has no enum that's tiny enough — declare a typed null local.
             I2cConnectionSettings i2cRef = null;
 
+            Debug.WriteLine("BRINGUP: ===== " + Version + " =====");
+
             int n = 0;
             while (true)
             {
                 Debug.WriteLine(
-                    "BRINGUP: hello " + n.ToString() +
+                    "BRINGUP[" + Version + "]: hello " + n.ToString() +
                     "  gpio=" + ((int)gpioRef).ToString() +
                     "  spi="  + ((int)spiRef).ToString() +
                     "  esp="  + ((int)espRef).ToString() +
