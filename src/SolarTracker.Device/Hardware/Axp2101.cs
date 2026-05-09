@@ -41,28 +41,19 @@ namespace SolarTracker.Device.Hardware
 
         public void EnableDisplayAndTouch()
         {
-            // Voltage values are in 100mV steps from a 500mV base where applicable.
-            // 0x12 = 18 → 0.5V + 18 * 0.1V = 2.3V… we want 3.3V which is encoding 0x1C (28).
-            // Reference firmware uses 0x1C (28) for the 3.3V rails.
+            // 0x1C = 28 → 0.5V + 28 * 0.1V = 3.3V on this rail's voltage register.
             const byte volts3v3 = 0x1C;
 
-            // LCD logic and reset / backlight on BLDO1, BLDO2, DLDO1.
-            WriteReg(RegBldo1Volt, volts3v3);
-            WriteReg(RegBldo2Volt, volts3v3);
-            WriteReg(RegDldo1Volt, volts3v3);
+            WriteReg(RegBldo1Volt, volts3v3); // LCD logic
+            WriteReg(RegBldo2Volt, volts3v3); // LCD reset
+            WriteReg(RegDldo1Volt, volts3v3); // backlight
+            WriteReg(RegAldo2Volt, volts3v3); // touch
 
-            // Touch needs ALDO2 high.
-            WriteReg(RegAldo2Volt, volts3v3);
-
-            // Enable bits in LDO_ONOFF registers.
-            //   RegLdoOnOff0: bit0=ALDO1 bit1=ALDO2 bit2=ALDO3 bit3=ALDO4
-            //                 bit4=BLDO1 bit5=BLDO2 bit6=DLDO1 bit7=DLDO2
-            byte on0 = ReadReg(RegLdoOnOff0);
-            on0 |= 0x02; // ALDO2 (touch)
-            on0 |= 0x10; // BLDO1 (LCD logic)
-            on0 |= 0x20; // BLDO2 (LCD reset)
-            on0 |= 0x40; // DLDO1 (backlight)
-            WriteReg(RegLdoOnOff0, on0);
+            // Enable rails. Value taken straight from M5GFX's CoreS3 init —
+            // 0xBF = ALDO1..4 + BLDO1..2 + DLDO at the bit M5Stack picked.
+            // Their bit-7-is-DLDO1 mapping doesn't match the public AXP2101
+            // datasheet, but matches what the on-board chip actually does.
+            WriteReg(RegLdoOnOff0, 0xBF);
 
             // Give rails a moment to come up before the display init runs.
             Thread.Sleep(50);

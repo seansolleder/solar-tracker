@@ -20,6 +20,9 @@
   <ItemGroup>
     <Compile Include="Program.cs" />
     <!-- Linked from the main Device project so the bring-up uses identical drivers. -->
+    <Compile Include="..\SolarTracker.Device\Hardware\Aw9523.cs">
+      <Link>Hardware\Aw9523.cs</Link>
+    </Compile>
     <Compile Include="..\SolarTracker.Device\Hardware\Axp2101.cs">
       <Link>Hardware\Axp2101.cs</Link>
     </Compile>

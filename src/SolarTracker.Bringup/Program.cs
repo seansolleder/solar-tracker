@@ -21,7 +21,7 @@ namespace SolarTracker.Bringup
     {
         // Bump on every Bringup change so we can confirm the device is
         // running the latest pushed code.
-        private const string Version = "bringup-v8-misoreal-csmanual";
+        private const string Version = "bringup-v9-aw9523";
 
         // Pin map matches the M5Stack CoreS3 reference schematic.
         // nanoFramework's DeviceFunction only exposes SPI1_* and SPI2_*
@@ -50,11 +50,18 @@ namespace SolarTracker.Bringup
             pmic.EnableDisplayAndTouch();
             Debug.WriteLine("BRINGUP: PMIC enabled");
 
-            // 2) Display. Bus 2 / SPI2_* with MISO routed to an unused GPIO
-            // (the driver requires a real pin) and CS bypassed — we drive
-            // GPIO3 manually as a plain GPIO output because nanoFramework's
-            // SPI driver may reject it as a chip-select line (GPIO3 is a
-            // strapping pin on the ESP32-S3).
+            // 1b) AW9523 I/O expander — releases LCD reset. The CoreS3 routes
+            // LCD_RST through this chip rather than a direct GPIO, so without
+            // configuring it, the panel stays in reset and ignores SPI even
+            // though the rails are powered.
+            I2cDevice aw9523I2c = I2cDevice.Create(new I2cConnectionSettings(InternalI2cBus, Aw9523.DefaultAddress));
+            Aw9523 aw9523 = new Aw9523(aw9523I2c);
+            aw9523.InitForCoreS3();
+            Thread.Sleep(50); // let LCD come out of reset
+            Debug.WriteLine("BRINGUP: AW9523 initialised, LCD released from reset");
+
+            // 2) Display. Bus 2 / SPI2_* with MISO assigned to an unused
+            // pin (driver requires a real GPIO).
             Configuration.SetPinFunction(LcdMosi, DeviceFunction.SPI2_MOSI);
             Configuration.SetPinFunction(LcdSck,  DeviceFunction.SPI2_CLOCK);
             Configuration.SetPinFunction(48,      DeviceFunction.SPI2_MISO);
@@ -62,10 +69,8 @@ namespace SolarTracker.Bringup
             GpioController gpio = new GpioController();
             GpioPin dc = gpio.OpenPin(LcdDc, PinMode.Output);
             dc.Write(PinValue.High);
-            GpioPin cs = gpio.OpenPin(LcdCs, PinMode.Output);
-            cs.Write(PinValue.Low); // hold CS low for the entire test — only one device on the bus
 
-            SpiConnectionSettings spi = new SpiConnectionSettings(LcdSpiBus, -1)
+            SpiConnectionSettings spi = new SpiConnectionSettings(LcdSpiBus, LcdCs)
             {
                 ClockFrequency = 10_000_000,
                 Mode = SpiMode.Mode0
