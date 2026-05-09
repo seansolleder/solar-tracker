@@ -42,7 +42,12 @@ The buck converter bridges the 24 V motor battery to the 5 V logic side.
 
 ## Firmware
 
-.NET nanoFramework targeting the ESP32-S3 image. Solution at `SolarTracker.sln`, device project at `src/SolarTracker.Device/`.
+.NET nanoFramework targeting the ESP32-S3 image. Solution at `SolarTracker.sln`. Two projects:
+
+- `src/SolarTracker.Bringup/` — minimal PMIC + display + touch test, no sensors needed. Use this first.
+- `src/SolarTracker.Device/` — full firmware (dashboard + calibration + GPS + IMU + AS5600).
+
+**Setup + bring-up walkthrough:** see [docs/setup.md](docs/setup.md).
 
 | File | Role |
 |---|---|
