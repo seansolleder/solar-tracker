@@ -24,11 +24,14 @@ namespace SolarTracker.Bringup
     public class Program
     {
         // Pin map matches the full firmware (CoreS3 reference schematic).
+        // Note: nanoFramework numbers user SPI buses starting at 1, so bus 1
+        // here is the ESP32-S3's FSPI (which the SoC docs call SPI2). Use the
+        // SPI1_* DeviceFunction values to match.
         private const int LcdMosi = 37;
         private const int LcdSck  = 36;
         private const int LcdCs   = 3;
         private const int LcdDc   = 35;
-        private const int LcdSpiBus = 2;
+        private const int LcdSpiBus = 1;
 
         private const int InternalSda = 12;
         private const int InternalScl = 11;
@@ -50,9 +53,9 @@ namespace SolarTracker.Bringup
             // 2) Display. nanoFramework's ESP32 SPI needs every signal pin
             // assigned — MISO with -1 marks it as unused on this write-only
             // LCD bus, and CS gets a real GPIO so the driver can toggle it.
-            Configuration.SetPinFunction(LcdMosi, DeviceFunction.SPI2_MOSI);
-            Configuration.SetPinFunction(LcdSck,  DeviceFunction.SPI2_CLOCK);
-            Configuration.SetPinFunction(-1,      DeviceFunction.SPI2_MISO);
+            Configuration.SetPinFunction(LcdMosi, DeviceFunction.SPI1_MOSI);
+            Configuration.SetPinFunction(LcdSck,  DeviceFunction.SPI1_CLOCK);
+            Configuration.SetPinFunction(-1,      DeviceFunction.SPI1_MISO);
 
             GpioController gpio = new GpioController();
             GpioPin dc = gpio.OpenPin(LcdDc, PinMode.Output);
