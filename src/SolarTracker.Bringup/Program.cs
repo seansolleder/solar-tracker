@@ -47,21 +47,17 @@ namespace SolarTracker.Bringup
             pmic.EnableDisplayAndTouch();
             Debug.WriteLine("BRINGUP: PMIC enabled");
 
-            // 2) Display. Pass CS as -1 so the SPI driver doesn't try to
-            // manage it — GPIO3 is a strapping pin on the ESP32-S3 and the
-            // nanoFramework SPI driver rejects it. We toggle CS manually as
-            // a plain GPIO instead, which is what M5Stack's reference does.
+            // 2) Display. Pin map confirmed against M5GFX reference: SPI2,
+            // MOSI=37, SCK=36, CS=3, DC=35. M5GFX shares GPIO35 between MISO
+            // and DC; we drive it as DC only, so we simply don't assign MISO.
             Configuration.SetPinFunction(LcdMosi, DeviceFunction.SPI2_MOSI);
             Configuration.SetPinFunction(LcdSck,  DeviceFunction.SPI2_CLOCK);
-            Configuration.SetPinFunction(-1,      DeviceFunction.SPI2_MISO);
 
             GpioController gpio = new GpioController();
             GpioPin dc = gpio.OpenPin(LcdDc, PinMode.Output);
             dc.Write(PinValue.High);
-            GpioPin cs = gpio.OpenPin(LcdCs, PinMode.Output);
-            cs.Write(PinValue.Low); // hold CS low for the entire test
 
-            SpiConnectionSettings spi = new SpiConnectionSettings(LcdSpiBus, -1)
+            SpiConnectionSettings spi = new SpiConnectionSettings(LcdSpiBus, LcdCs)
             {
                 ClockFrequency = 10_000_000,
                 Mode = SpiMode.Mode0
