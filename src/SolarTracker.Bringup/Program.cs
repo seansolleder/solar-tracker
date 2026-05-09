@@ -16,7 +16,7 @@ namespace SolarTracker.Bringup
     {
         // Bump this on every commit so we can confirm the device is running
         // the latest pushed code (vs a stale cached build).
-        private const string Version = "ref-test-v2";
+        private const string Version = "ref-test-v3-downgraded";
 
         public static void Main()
         {
