@@ -47,9 +47,11 @@ namespace SolarTracker.Bringup
             pmic.EnableDisplayAndTouch();
             Debug.WriteLine("BRINGUP: PMIC enabled");
 
-            // 2) Display.
+            // 2) Display. nanoFramework's ESP32 SPI requires MISO to be assigned
+            // even on a write-only LCD bus — pass -1 to mark it as unused.
             Configuration.SetPinFunction(LcdMosi, DeviceFunction.SPI2_MOSI);
             Configuration.SetPinFunction(LcdSck,  DeviceFunction.SPI2_CLOCK);
+            Configuration.SetPinFunction(-1,      DeviceFunction.SPI2_MISO);
 
             GpioController gpio = new GpioController();
             GpioPin dc = gpio.OpenPin(LcdDc, PinMode.Output);
