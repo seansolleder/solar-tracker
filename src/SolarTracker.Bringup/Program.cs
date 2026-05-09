@@ -21,17 +21,16 @@ namespace SolarTracker.Bringup
     {
         // Bump on every Bringup change so we can confirm the device is
         // running the latest pushed code.
-        private const string Version = "bringup-v7-spi3";
+        private const string Version = "bringup-v8-misoreal-csmanual";
 
         // Pin map matches the M5Stack CoreS3 reference schematic.
-        // ESP32-S3 SPI2 (FSPI) is sometimes occupied by the on-module PSRAM
-        // controller, leaving SPI3 (HSPI) as the only fully-user-accessible
-        // SPI bus. Trying bus 3 with the matching SPI3_* pin functions.
+        // nanoFramework's DeviceFunction only exposes SPI1_* and SPI2_*
+        // on this chip, so SPI3 isn't available. Sticking with bus 2.
         private const int LcdMosi = 37;
         private const int LcdSck  = 36;
         private const int LcdCs   = 3;
         private const int LcdDc   = 35;
-        private const int LcdSpiBus = 3;
+        private const int LcdSpiBus = 2;
 
         private const int InternalSda = 12;
         private const int InternalScl = 11;
@@ -51,18 +50,22 @@ namespace SolarTracker.Bringup
             pmic.EnableDisplayAndTouch();
             Debug.WriteLine("BRINGUP: PMIC enabled");
 
-            // 2) Display. Trying SPI3 (HSPI) — SPI2 (FSPI) on ESP32-S3 is
-            // sometimes claimed by the on-module PSRAM controller. MISO
-            // routed to GPIO48 (unused) since the driver requires it.
-            Configuration.SetPinFunction(LcdMosi, DeviceFunction.SPI3_MOSI);
-            Configuration.SetPinFunction(LcdSck,  DeviceFunction.SPI3_CLOCK);
-            Configuration.SetPinFunction(48,      DeviceFunction.SPI3_MISO);
+            // 2) Display. Bus 2 / SPI2_* with MISO routed to an unused GPIO
+            // (the driver requires a real pin) and CS bypassed — we drive
+            // GPIO3 manually as a plain GPIO output because nanoFramework's
+            // SPI driver may reject it as a chip-select line (GPIO3 is a
+            // strapping pin on the ESP32-S3).
+            Configuration.SetPinFunction(LcdMosi, DeviceFunction.SPI2_MOSI);
+            Configuration.SetPinFunction(LcdSck,  DeviceFunction.SPI2_CLOCK);
+            Configuration.SetPinFunction(48,      DeviceFunction.SPI2_MISO);
 
             GpioController gpio = new GpioController();
             GpioPin dc = gpio.OpenPin(LcdDc, PinMode.Output);
             dc.Write(PinValue.High);
+            GpioPin cs = gpio.OpenPin(LcdCs, PinMode.Output);
+            cs.Write(PinValue.Low); // hold CS low for the entire test — only one device on the bus
 
-            SpiConnectionSettings spi = new SpiConnectionSettings(LcdSpiBus, LcdCs)
+            SpiConnectionSettings spi = new SpiConnectionSettings(LcdSpiBus, -1)
             {
                 ClockFrequency = 10_000_000,
                 Mode = SpiMode.Mode0
