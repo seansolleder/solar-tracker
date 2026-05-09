@@ -25,10 +25,10 @@
       <HintPath>..\..\packages\nanoFramework.CoreLibrary.1.17.11\lib\mscorlib.dll</HintPath>
     </Reference>
     <Reference Include="nanoFramework.Hardware.Esp32">
-      <HintPath>..\..\packages\nanoFramework.Hardware.Esp32.1.6.36\lib\nanoFramework.Hardware.Esp32.dll</HintPath>
+      <HintPath>..\..\packages\nanoFramework.Hardware.Esp32.1.6.37\lib\nanoFramework.Hardware.Esp32.dll</HintPath>
     </Reference>
     <Reference Include="nanoFramework.Runtime.Events">
-      <HintPath>..\..\packages\nanoFramework.Runtime.Events.1.11.31\lib\nanoFramework.Runtime.Events.dll</HintPath>
+      <HintPath>..\..\packages\nanoFramework.Runtime.Events.1.11.32\lib\nanoFramework.Runtime.Events.dll</HintPath>
     </Reference>
     <Reference Include="System.Device.Gpio">
       <HintPath>..\..\packages\nanoFramework.System.Device.Gpio.1.1.56\lib\System.Device.Gpio.dll</HintPath>
