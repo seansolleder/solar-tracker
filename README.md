@@ -48,26 +48,44 @@ The buck converter bridges the 24 V motor battery to the 5 V logic side.
 |---|---|
 | `Program.cs` | Pin assignments, boot sequence, render loop |
 | `Hardware/Axp2101.cs` | PMIC bring-up — must run before display/touch |
+| `Hardware/Calibration.cs` | Flash-backed `azimuth_zero` storage |
 | `Hardware/Display.cs` | ILI9342C SPI driver (fill, rect, text) |
 | `Hardware/Font5x7.cs` | Bitmap font for the dashboard |
+| `Hardware/Touch.cs` | FT6336U capacitive touch reader |
+| `Sensors/As5600.cs` | AS5600 12-bit absolute magnetic encoder |
 | `Sensors/Gps.cs` | ATGM336H NMEA-0183 parser (RMC sentence) |
 | `Sensors/Imu.cs` | MPU6886 accel → pitch/roll |
-| `Ui/Dashboard.cs` | Single-screen layout (GPS / tilt / azimuth) |
+| `Ui/CalibrationScreen.cs` | Install-time "point south, tap CONFIRM" flow |
+| `Ui/Dashboard.cs` | Main screen — GPS / tilt / azimuth |
 
 ### Boot sequence
 
 1. Configure internal I²C → talk to AXP2101 → enable BLDO1/BLDO2/DLDO1 (display) and ALDO2 (touch).
 2. Configure SPI2 + DC pin → init ILI9342C → blank screen.
-3. Draw static dashboard chrome.
-4. Configure Grove I²C → init MPU6886 (verify WHO_AM_I = 0x19).
-5. Open Port C UART → start GPS reader thread.
-6. Loop: read IMU + snapshot GPS → push values into the dashboard.
+3. Open touch (FT6336U) on the internal I²C bus.
+4. Configure Grove I²C → init MPU6886 + AS5600.
+5. Load `azimuth_zero` from `I:\calibration.dat`. If missing, run the calibration screen and write it.
+6. Open Port C UART → start GPS reader thread.
+7. Draw the dashboard.
+8. Loop: read sensors → update dashboard → poll touch (tap on AZIMUTH row re-enters calibration).
+
+### Calibration
+
+The AS5600 reports a 12-bit absolute angle (0–4095) of whatever orientation the magnet currently has. To turn that into a real-world azimuth, the firmware needs to know which raw reading corresponds to "panel pointing due south." That mapping is the install-time calibration:
+
+1. Mount everything mechanically — encoder, magnet, motors.
+2. Power on. If no calibration is stored, the calibration screen appears with the live raw value and magnet-health indicator.
+3. Manually point the panel due south (phone compass for a rough alignment, solar-noon shadow for ±0.5°).
+4. Tap **CONFIRM SOUTH**. The current raw value is written to flash as `azimuth_zero`.
+5. The dashboard takes over and shows `(raw − azimuth_zero)` in degrees as the panel azimuth.
+
+The calibration persists across power loss and firmware redeploys (kept in the user-data partition, separate from the code partition). Tap the AZIMUTH row on the dashboard to re-enter calibration if the magnet is ever re-glued or the encoder is re-mounted.
 
 ### Hardware notes
 
-- **AS5600 azimuth encoder** — reserved in `Dashboard.Update(..., azimuthDeg)`. Wire and driver to be added once the part arrives.
-- **Touch (FT6336U)** — display rail is enabled but no touch driver yet. Plan: page-switch dashboard ↔ diagnostics once added.
 - **AXP2101 register values** — taken from the M5Stack reference firmware. If the screen stays dark on first boot, the ALDO/BLDO/DLDO map is the place to look.
+- **AS5600 magnet** must be diametrically magnetized and centered on the rotation axis within ~0.25 mm. 1–2 mm air gap to the sensor.
+- **Touch coordinate system** may need flipping depending on panel rotation — easy to invert in `Touch.TryRead()` once verified on hardware.
 
 ## Status
 

@@ -17,13 +17,17 @@ namespace SolarTracker.Device.Ui
     //  │   PITCH  +12.3 DEG       │
     //  │   ROLL   -01.4 DEG       │
     //  │--------------------------│
-    //  │  AZIMUTH  ---.- DEG      │  placeholder until AS5600 arrives
+    //  │  AZIMUTH +12.3 DEG  RECAL│  tap row to recalibrate
     //  └──────────────────────────┘
     //
     // Layout uses fixed positions instead of dirty-rect tracking — cheaper than
     // it sounds because each row is a thin strip and we only redraw on change.
     public sealed class Dashboard
     {
+        // Touch zone for "tap to recalibrate" — entire azimuth row.
+        public const int RecalZoneY = 175;
+        public const int RecalZoneHeight = 60;
+
         private readonly Display _display;
 
         public Dashboard(Display display)
@@ -40,9 +44,10 @@ namespace SolarTracker.Device.Ui
             _display.DrawText(6, 28,  "GPS",         Display.ColorAmber, Display.ColorBlack, 2);
             _display.DrawText(6, 110, "PANEL TILT",  Display.ColorAmber, Display.ColorBlack, 2);
             _display.DrawText(6, 180, "AZIMUTH",     Display.ColorAmber, Display.ColorBlack, 2);
+            _display.DrawText(252, 180, "RECAL",     (ushort)0x4208 /* dim grey */, Display.ColorBlack, 1);
         }
 
-        public void Update(GpsFix gps, TiltReading tilt, double? azimuthDeg)
+        public void Update(GpsFix gps, TiltReading tilt, double? azimuthDeg, bool magnetOk)
         {
             // GPS block
             DrawValue( 26,  50, "LAT", FormatLatLon(gps.Latitude),   gps.HasFix);
@@ -55,9 +60,21 @@ namespace SolarTracker.Device.Ui
             DrawValue( 26, 132, "PITCH", FormatDeg(tilt.PitchDeg), true);
             DrawValue( 26, 154, "ROLL",  FormatDeg(tilt.RollDeg),  true);
 
-            // Azimuth (encoder may not exist yet)
-            string azText = azimuthDeg.HasValue ? FormatDeg(azimuthDeg.Value) : "---.- DEG";
-            DrawValue( 26, 202, "", azText, azimuthDeg.HasValue);
+            // Azimuth — three states:
+            //   not calibrated → "NOT CAL", red
+            //   calibrated but magnet bad → "MAG ERR", red
+            //   healthy → angle in degrees, green
+            string azText;
+            bool ok;
+            if (!azimuthDeg.HasValue)   { azText = "NOT CAL";  ok = false; }
+            else if (!magnetOk)         { azText = "MAG ERR";  ok = false; }
+            else                        { azText = FormatDeg(azimuthDeg.Value); ok = true; }
+            DrawValue( 26, 202, "", azText, ok);
+        }
+
+        public static bool IsRecalibrateTap(int y)
+        {
+            return y >= RecalZoneY && y < RecalZoneY + RecalZoneHeight;
         }
 
         private void DrawValue(int x, int y, string label, string value, bool ok)
@@ -65,7 +82,7 @@ namespace SolarTracker.Device.Ui
             ushort fg = ok ? Display.ColorGreen : Display.ColorRed;
             // Wipe the row before writing — avoids ghost characters when the
             // new value is shorter than the previous one.
-            _display.FillRect(x, y, 280, 18, Display.ColorBlack);
+            _display.FillRect(x, y, 230, 18, Display.ColorBlack);
             if (label.Length > 0)
             {
                 _display.DrawText(x, y, label, Display.ColorWhite, Display.ColorBlack, 2);

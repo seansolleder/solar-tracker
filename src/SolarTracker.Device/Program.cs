@@ -16,13 +16,12 @@ namespace SolarTracker.Device
         // CoreS3 pin assignments — ESP32-S3 GPIOs from the M5Stack reference schematic.
         // Internal display SPI bus
         private const int LcdMosi = 37;
-        private const int LcdMiso = -1;          // not used (write-only)
         private const int LcdSck  = 36;
         private const int LcdCs   = 3;
         private const int LcdDc   = 35;
         private const int LcdSpiBus = 2;         // SPI2 / FSPI
 
-        // Internal I2C (PMIC, touch, onboard sensors) — separate from the Grove/Hub bus
+        // Internal I2C (PMIC + touch) — separate from the Grove/Hub bus
         private const int InternalSda = 12;
         private const int InternalScl = 11;
         private const int InternalI2cBus = 1;
@@ -33,8 +32,8 @@ namespace SolarTracker.Device
         private const int GroveI2cBus = 0;
 
         // Port C UART (Extension module → ATGM336H GPS)
-        private const int GpsTx = 17;            // CoreS3 → GPS RX (unused by GPS itself)
-        private const int GpsRx = 18;            // CoreS3 ← GPS TX
+        private const int GpsTx = 17;
+        private const int GpsRx = 18;
         private const string GpsPort = "COM2";
 
         public static void Main()
@@ -65,11 +64,11 @@ namespace SolarTracker.Device
             Display display = new Display(spi, dc);
             display.Init();
 
-            // 3) Bring up the dashboard so something is on screen even before sensors respond.
-            Dashboard dashboard = new Dashboard(display);
-            dashboard.DrawStatic();
+            // 3) Touch lives on the same internal I²C bus as the PMIC.
+            I2cDevice touchI2c = I2cDevice.Create(new I2cConnectionSettings(InternalI2cBus, Touch.DefaultAddress));
+            Touch touch = new Touch(touchI2c);
 
-            // 4) Sensors on the Grove I2C bus.
+            // 4) Sensors on the Grove I²C bus — MPU6886 (tilt) + AS5600 (azimuth).
             Configuration.SetPinFunction(GroveSda, DeviceFunction.I2C2_DATA);
             Configuration.SetPinFunction(GroveScl, DeviceFunction.I2C2_CLOCK);
 
@@ -77,23 +76,61 @@ namespace SolarTracker.Device
             Imu imu = new Imu(imuI2c);
             bool imuOk = imu.Init();
 
-            // 5) GPS on Port C UART.
+            I2cDevice encI2c = I2cDevice.Create(new I2cConnectionSettings(GroveI2cBus, As5600.DefaultAddress));
+            As5600 encoder = new As5600(encI2c);
+
+            // 5) Load calibration from flash. If there isn't one, run the
+            //    install-time calibration screen first — without a valid
+            //    azimuth_zero, the dashboard's azimuth is meaningless.
+            Calibration calStorage = new Calibration();
+            int azimuthZero;
+            bool calibrated = calStorage.TryLoad(out azimuthZero);
+
+            CalibrationScreen calScreen = new CalibrationScreen(display, encoder, touch);
+            if (!calibrated)
+            {
+                azimuthZero = calScreen.Run();
+                calStorage.Save(azimuthZero);
+                calibrated = true;
+            }
+
+            // 6) GPS reader.
             Configuration.SetPinFunction(GpsTx, DeviceFunction.COM2_TX);
             Configuration.SetPinFunction(GpsRx, DeviceFunction.COM2_RX);
             Gps gps = new Gps(GpsPort);
             gps.Start();
 
-            // 6) Main render loop. Keep this slow — the panel won't move
-            //    fast enough to need anything more frequent.
+            // 7) Show the dashboard.
+            Dashboard dashboard = new Dashboard(display);
+            dashboard.DrawStatic();
+
+            // 8) Render loop.
+            //    - Read sensors, push to dashboard.
+            //    - Poll touch; a tap on the AZIMUTH row re-enters calibration mode.
             TiltReading tilt = new TiltReading();
+            bool wasTouching = false;
+
             while (true)
             {
                 if (imuOk) tilt = imu.Read();
                 GpsFix fix = gps.Snapshot();
 
-                dashboard.Update(fix, tilt, null /* azimuth — encoder pending */);
+                int rawAngle = encoder.ReadRaw();
+                As5600Status encStatus = encoder.ReadStatus();
+                double? azDeg = calibrated ? (double?)As5600.ToDegrees(rawAngle, azimuthZero) : null;
 
-                Thread.Sleep(500);
+                dashboard.Update(fix, tilt, azDeg, encStatus.IsHealthy);
+
+                bool touching = touch.TryRead(out int tx, out int ty);
+                if (touching && !wasTouching && Dashboard.IsRecalibrateTap(ty))
+                {
+                    azimuthZero = calScreen.Run();
+                    calStorage.Save(azimuthZero);
+                    dashboard.DrawStatic();
+                }
+                wasTouching = touching;
+
+                Thread.Sleep(200);
             }
         }
     }
