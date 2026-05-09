@@ -21,7 +21,7 @@ namespace SolarTracker.Bringup
     {
         // Bump on every Bringup change so we can confirm the device is
         // running the latest pushed code.
-        private const string Version = "bringup-v5";
+        private const string Version = "bringup-v6";
 
         // Pin map matches the M5Stack CoreS3 reference schematic.
         private const int LcdMosi = 37;
@@ -48,9 +48,13 @@ namespace SolarTracker.Bringup
             pmic.EnableDisplayAndTouch();
             Debug.WriteLine("BRINGUP: PMIC enabled");
 
-            // 2) Display.
+            // 2) Display. nanoFramework's ESP32 SPI driver rejects -1 for MISO
+            // and also fails if MISO isn't assigned at all. Pin GPIO48 isn't
+            // connected to anything on the CoreS3, so we route MISO there to
+            // satisfy the driver — the LCD doesn't need MISO anyway.
             Configuration.SetPinFunction(LcdMosi, DeviceFunction.SPI2_MOSI);
             Configuration.SetPinFunction(LcdSck,  DeviceFunction.SPI2_CLOCK);
+            Configuration.SetPinFunction(48,      DeviceFunction.SPI2_MISO);
 
             GpioController gpio = new GpioController();
             GpioPin dc = gpio.OpenPin(LcdDc, PinMode.Output);
