@@ -21,7 +21,7 @@ namespace SolarTracker.Bringup
     {
         // Bump on every Bringup change so we can confirm the device is
         // running the latest pushed code.
-        private const string Version = "bringup-v9-aw9523";
+        private const string Version = "bringup-v10-toucheddebug";
 
         // Pin map matches the M5Stack CoreS3 reference schematic.
         // nanoFramework's DeviceFunction only exposes SPI1_* and SPI2_*
@@ -96,26 +96,34 @@ namespace SolarTracker.Bringup
 
             int taps = 0;
             int lastX = -1, lastY = -1;
+            bool wasTouching = false;
 
             while (true)
             {
-                if (touch.TryRead(out int tx, out int ty))
+                bool isTouching = touch.TryRead(out int tx, out int ty);
+
+                // Fires once per touch-down event so we can confirm the panel
+                // is responsive even if the LCD still isn't showing anything.
+                if (isTouching && !wasTouching)
                 {
-                    if (tx != lastX || ty != lastY)
-                    {
-                        if (lastX >= 0) display.FillRect(lastX - 5, lastY - 5, 10, 10, Display.ColorBlack);
-                        display.FillRect(tx - 5, ty - 5, 10, 10, Display.ColorWhite);
-
-                        display.FillRect(20, 200, 280, 18, Display.ColorBlack);
-                        display.DrawText(20, 200,
-                            "X=" + tx.ToString() + " Y=" + ty.ToString(),
-                            Display.ColorGreen, Display.ColorBlack, 2);
-
-                        taps++;
-                        Debug.WriteLine("BRINGUP[" + Version + "]: tap " + taps.ToString() + " at " + tx.ToString() + "," + ty.ToString());
-                        lastX = tx; lastY = ty;
-                    }
+                    Debug.WriteLine("BRINGUP[" + Version + "]: TOUCHED at X=" + tx.ToString() + " Y=" + ty.ToString());
                 }
+                wasTouching = isTouching;
+
+                if (isTouching && (tx != lastX || ty != lastY))
+                {
+                    if (lastX >= 0) display.FillRect(lastX - 5, lastY - 5, 10, 10, Display.ColorBlack);
+                    display.FillRect(tx - 5, ty - 5, 10, 10, Display.ColorWhite);
+
+                    display.FillRect(20, 200, 280, 18, Display.ColorBlack);
+                    display.DrawText(20, 200,
+                        "X=" + tx.ToString() + " Y=" + ty.ToString(),
+                        Display.ColorGreen, Display.ColorBlack, 2);
+
+                    taps++;
+                    lastX = tx; lastY = ty;
+                }
+
                 Thread.Sleep(50);
             }
         }
