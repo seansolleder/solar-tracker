@@ -47,8 +47,9 @@ namespace SolarTracker.Bringup
             pmic.EnableDisplayAndTouch();
             Debug.WriteLine("BRINGUP: PMIC enabled");
 
-            // 2) Display. nanoFramework's ESP32 SPI requires MISO to be assigned
-            // even on a write-only LCD bus — pass -1 to mark it as unused.
+            // 2) Display. nanoFramework's ESP32 SPI needs every signal pin
+            // assigned — MISO with -1 marks it as unused on this write-only
+            // LCD bus, and CS gets a real GPIO so the driver can toggle it.
             Configuration.SetPinFunction(LcdMosi, DeviceFunction.SPI2_MOSI);
             Configuration.SetPinFunction(LcdSck,  DeviceFunction.SPI2_CLOCK);
             Configuration.SetPinFunction(-1,      DeviceFunction.SPI2_MISO);
@@ -57,11 +58,12 @@ namespace SolarTracker.Bringup
             GpioPin dc = gpio.OpenPin(LcdDc, PinMode.Output);
             dc.Write(PinValue.High);
 
+            // ILI9342C accepts up to ~40 MHz, but starting at 10 MHz so we
+            // can prove the path before tuning. Default DataBitLength is 8.
             SpiConnectionSettings spi = new SpiConnectionSettings(LcdSpiBus, LcdCs)
             {
-                ClockFrequency = 40_000_000,
-                Mode = SpiMode.Mode0,
-                DataBitLength = 8
+                ClockFrequency = 10_000_000,
+                Mode = SpiMode.Mode0
             };
             Display display = new Display(SpiDevice.Create(spi), dc);
             display.Init();
