@@ -74,33 +74,44 @@ If no port appears:
 This is a one-time step per device. It replaces the factory firmware with the nanoFramework runtime; after this the device runs whatever .NET assembly you deploy from Visual Studio.
 
 ```powershell
-nanoff --target M5Core_S3 --serialport COM5 --update
+nanoff --target ESP32_S3_ALL_UART --serialport COM5 --update --masserase
 ```
 
-If `M5Core_S3` isn't recognised, fall back to the generic ESP32-S3 image:
+**Why each flag matters:**
+
+| Flag | Reason |
+|---|---|
+| `ESP32_S3_ALL_UART` | `_ALL` includes the file system this project needs for `calibration.dat`. `_UART` routes the nanoFramework debug interface through the CoreS3's CH9102 USB-UART chip — which is how Visual Studio talks to the device. The plain `ESP32_S3` and BLE variants will boot but VS Debug won't see them. |
+| `--masserase` | Wipes flash before writing instead of doing the default read-then-write backup step. The backup step regularly fails partway through on first flash with a SLIP-frame timeout — `--masserase` skips it entirely. |
+
+Confirm what targets are actually available on your installed `nanoff`:
 
 ```powershell
-nanoff --target ESP32_S3_BLE --serialport COM5 --update
+nanoff --listtargets | Select-String S3
 ```
 
-Available targets at any moment:
-
-```powershell
-nanoff --listtargets
-```
-
-Expected output (abridged):
+You should see at least:
 
 ```
-[...]
-Updating to <version>
+ESP32_S3_BLE_UART
+ESP32_S3_BLE
+ESP32_S3_ALL_UART
+ESP32_S3
+ESP32_S3_ALL
+```
+
+Expected output of the flash command (abridged):
+
+```
+Reading details from chip...OK
+Connected to: ESP32-S3 (...)
+Extracting ESP32_S3_ALL_UART-1.x.x.zip...OK
+Updating to 1.x.x
 Erasing flash...
-Flash erased.
-Programming...
 Flashing successful!
 ```
 
-Total time: ~30 seconds. The device will reboot automatically.
+Total time: ~1–2 minutes. The device will reboot automatically.
 
 ---
 
@@ -165,13 +176,33 @@ The CoreS3 panel orientation and the FT6336U's reported coordinates don't always
 - Close any other tool that has the COM port open (PuTTY, the previous `nanoff` window, Arduino IDE, etc.). Only one app can hold the port.
 - Unplug + replug the USB cable. Sometimes the previous deploy leaves the device in a wedged state.
 
-### `nanoff` complains about ESP32 communication
+### `nanoff` fails at "Failed to connect to ESP32 bootloader"
 
-If flashing gets stuck at "Connecting...", hold the **RST** button on the side of the CoreS3 while `nanoff` is connecting. Some revisions don't auto-reset into bootloader mode.
+The CoreS3 didn't auto-enter download mode. Manual procedure:
+
+1. Disconnect USB.
+2. Hold the **green POWER button** on the left side of the CoreS3 for 6 full seconds (forces a hard power-down).
+3. Keep holding it, plug USB back in. Screen stays dark — that's ROM bootloader mode.
+4. Run the `nanoff` command from step 3.
+5. Release the button once it says "Connecting…" or starts erasing.
+
+### `nanoff` fails partway through with "No complete SLIP frame received within 30000ms"
+
+This is the backup-config step timing out — it happens regularly on first flash. Two fixes:
+
+- Make sure you have `--masserase` in the command (skips backup entirely).
+- If still failing, lower the baud: add `--baud 115200`.
+
+If it's *still* failing, the USB cable / port is dropping bytes:
+
+- Try a different USB-C cable (use one you've confirmed works for data on something else).
+- Plug into a port directly on the motherboard, not through a hub or front-panel port.
 
 ### Deploy says "no debugger attached" or hangs
 
-Run `nanoff --target M5Core_S3 --serialport COM5 --devicedetails` — confirms the runtime is alive and matches the expected version. If the runtime version doesn't match the one your project was built against, re-run the `--update` from step 3.
+Run `nanoff --target ESP32_S3_ALL_UART --serialport COM5 --devicedetails` — confirms the runtime is alive and matches the expected version. If the runtime version doesn't match the one your project was built against, re-run the `--update` from step 3.
+
+If `--devicedetails` reports a runtime variant that's *not* `ESP32_S3_ALL_UART`, the wrong image is on the chip. Re-flash with the right target — Visual Studio's debugger only attaches to `_UART` images on the CoreS3 because that's the only variant exposing the debug interface through the CH9102.
 
 ---
 
