@@ -24,6 +24,11 @@ bin/
 obj/
 *.vcxproj.user
 
+# nanoFramework
+packages/
+.nanoFramework/
+*.nfproj.user
+
 # OS
 Thumbs.db
 .DS_Store
