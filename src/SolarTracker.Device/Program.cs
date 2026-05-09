@@ -46,9 +46,20 @@ namespace SolarTracker.Device
             Axp2101 pmic = new Axp2101(pmicI2c);
             pmic.EnableDisplayAndTouch();
 
-            // 2) Bring up the display.
+            // 1b) Release LCD reset via the AW9523 I/O expander on the same
+            // internal I²C bus. The CoreS3 doesn't wire LCD_RST to a regular
+            // GPIO — without this step the panel ignores SPI traffic.
+            I2cDevice aw9523I2c = I2cDevice.Create(new I2cConnectionSettings(InternalI2cBus, Aw9523.DefaultAddress));
+            Aw9523 aw9523 = new Aw9523(aw9523I2c);
+            aw9523.InitForCoreS3();
+            Thread.Sleep(50);
+
+            // 2) Bring up the display. MISO is routed to GPIO48 (unused on
+            // the CoreS3) because nanoFramework's SPI driver requires a real
+            // pin for MISO even on a write-only bus.
             Configuration.SetPinFunction(LcdMosi, DeviceFunction.SPI2_MOSI);
             Configuration.SetPinFunction(LcdSck,  DeviceFunction.SPI2_CLOCK);
+            Configuration.SetPinFunction(48,      DeviceFunction.SPI2_MISO);
 
             GpioController gpio = new GpioController();
             GpioPin dc = gpio.OpenPin(LcdDc, PinMode.Output);
@@ -56,9 +67,8 @@ namespace SolarTracker.Device
 
             SpiConnectionSettings spiSettings = new SpiConnectionSettings(LcdSpiBus, LcdCs)
             {
-                ClockFrequency = 40_000_000,
-                Mode = SpiMode.Mode0,
-                DataBitLength = 8
+                ClockFrequency = 10_000_000,
+                Mode = SpiMode.Mode0
             };
             SpiDevice spi = SpiDevice.Create(spiSettings);
             Display display = new Display(spi, dc);

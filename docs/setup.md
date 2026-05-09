@@ -74,14 +74,14 @@ If no port appears:
 This is a one-time step per device. It replaces the factory firmware with the nanoFramework runtime; after this the device runs whatever .NET assembly you deploy from Visual Studio.
 
 ```powershell
-nanoff --target ESP32_S3_ALL_UART --serialport COM5 --update --masserase
+nanoff --target ESP32_S3 --serialport COM5 --update --masserase
 ```
 
 **Why each flag matters:**
 
 | Flag | Reason |
 |---|---|
-| `ESP32_S3_ALL_UART` | `_ALL` includes the file system this project needs for `calibration.dat`. `_UART` routes the nanoFramework debug interface through the CoreS3's CH9102 USB-UART chip — which is how Visual Studio talks to the device. The plain `ESP32_S3` and BLE variants will boot but VS Debug won't see them. |
+| `ESP32_S3` | Plain ESP32_S3 image. We tested both `ESP32_S3` and `ESP32_S3_BLE` on the CoreS3 — both work and Visual Studio Debug sees both, despite earlier guidance saying you needed a `_UART` variant. The plain image gives the most flash room for user code. **Note**: `M5Core_S3` is *not* a real nanoff target — don't try that. |
 | `--masserase` | Wipes flash before writing instead of doing the default read-then-write backup step. The backup step regularly fails partway through on first flash with a SLIP-frame timeout — `--masserase` skips it entirely. |
 
 Confirm what targets are actually available on your installed `nanoff`:
@@ -178,13 +178,14 @@ The CoreS3 panel orientation and the FT6336U's reported coordinates don't always
 
 ### `nanoff` fails at "Failed to connect to ESP32 bootloader"
 
-The CoreS3 didn't auto-enter download mode. Manual procedure:
+The CoreS3's auto-reset over USB isn't reliable. Use the dedicated download-mode button — it's the small recessed button on the **front-bottom-right of the CoreS3**, just to the right of the SD card slot (label: *"PRESS: REBOOT, HOLD 3S: ENTER DOWNLOAD MODE (GREEN LED ON)"*).
 
-1. Disconnect USB.
-2. Hold the **green POWER button** on the left side of the CoreS3 for 6 full seconds (forces a hard power-down).
-3. Keep holding it, plug USB back in. Screen stays dark — that's ROM bootloader mode.
-4. Run the `nanoff` command from step 3.
-5. Release the button once it says "Connecting…" or starts erasing.
+1. With USB plugged in and the device on, **press and hold that button for 3 full seconds**.
+2. Watch for the **green LED** to turn on — that confirms the chip is now in ROM bootloader mode.
+3. Release the button.
+4. Now run the `nanoff` command from step 3 above.
+
+**Don't confuse this with the side power button** — that one only powers the device on/off and won't put it into download mode.
 
 ### `nanoff` fails partway through with "No complete SLIP frame received within 30000ms"
 
@@ -200,9 +201,27 @@ If it's *still* failing, the USB cable / port is dropping bytes:
 
 ### Deploy says "no debugger attached" or hangs
 
-Run `nanoff --target ESP32_S3_ALL_UART --serialport COM5 --devicedetails` — confirms the runtime is alive and matches the expected version. If the runtime version doesn't match the one your project was built against, re-run the `--update` from step 3.
+Run `nanoff --target ESP32_S3 --serialport COM5 --devicedetails` — confirms the runtime is alive. If the runtime version doesn't match what your project was built against, re-run the `--update` from step 3.
 
-If `--devicedetails` reports a runtime variant that's *not* `ESP32_S3_ALL_UART`, the wrong image is on the chip. Re-flash with the right target — Visual Studio's debugger only attaches to `_UART` images on the CoreS3 because that's the only variant exposing the debug interface through the CH9102.
+### Deploy succeeds but `Link failure: needs assembly 'X.Y.Z' (1.1.29.0)` in Debug output
+
+The runtime image has *specific* assembly versions of `System.Device.I2c`, `System.Device.Spi`, and `System.Device.Gpio` baked in. NuGet's *latest* package versions tend to be one patch ahead of what the runtime expects, and the runtime refuses to link them. The fix: use the `-1 patch` versions, which are what we pin in `packages.config`:
+
+| Package | Pinned (works) | Latest (won't link) |
+|---|---|---|
+| `nanoFramework.System.Device.Gpio` | `1.1.56` | 1.1.57 |
+| `nanoFramework.System.Device.I2c` | `1.1.28` | 1.1.29 |
+| `nanoFramework.System.Device.Spi` | `1.3.81` | 1.3.82 |
+
+If a future runtime update changes which versions are bundled, the link error itself will tell you what it wants — the message format is `needs assembly 'X' (V.V.V.V)`, where V.V.V.V is the version your project references but the runtime doesn't have. Inspect `~/.nanoFramework/fw_cache/<target>/<target>-<version>.zip → native_assemblies.csv` for the runtime's bundled list, but the link error is usually all you need.
+
+### Screen stays completely black even though `BRINGUP: display initialised` prints
+
+The CoreS3 has an **AW9523 I/O expander chip** at I²C address `0x58` that controls the LCD reset line. Without writing its output register, the LCD stays in reset and ignores everything we send over SPI. The bring-up project handles this in `Hardware/Aw9523.cs`; if you build a new project from scratch, remember to copy that driver in and call `aw9523.InitForCoreS3()` *before* `display.Init()`.
+
+### `SpiDevice.Create()` throws `ArgumentException` with empty message
+
+nanoFramework's ESP32 SPI driver requires every signal to be assigned to a real GPIO — even on a write-only bus where MISO is unused. `Configuration.SetPinFunction(-1, DeviceFunction.SPI2_MISO)` doesn't satisfy it; nor does omitting the call. Pick an unused GPIO (we use `48` on the CoreS3) and assign it as `SPI2_MISO`. The CoreS3's LCD has no MISO line, so the assignment doesn't conflict with anything.
 
 ---
 
