@@ -24,14 +24,11 @@ namespace SolarTracker.Bringup
     public class Program
     {
         // Pin map matches the full firmware (CoreS3 reference schematic).
-        // Note: nanoFramework numbers user SPI buses starting at 1, so bus 1
-        // here is the ESP32-S3's FSPI (which the SoC docs call SPI2). Use the
-        // SPI1_* DeviceFunction values to match.
         private const int LcdMosi = 37;
         private const int LcdSck  = 36;
         private const int LcdCs   = 3;
         private const int LcdDc   = 35;
-        private const int LcdSpiBus = 1;
+        private const int LcdSpiBus = 2;
 
         private const int InternalSda = 12;
         private const int InternalScl = 11;
@@ -50,20 +47,21 @@ namespace SolarTracker.Bringup
             pmic.EnableDisplayAndTouch();
             Debug.WriteLine("BRINGUP: PMIC enabled");
 
-            // 2) Display. nanoFramework's ESP32 SPI needs every signal pin
-            // assigned — MISO with -1 marks it as unused on this write-only
-            // LCD bus, and CS gets a real GPIO so the driver can toggle it.
-            Configuration.SetPinFunction(LcdMosi, DeviceFunction.SPI1_MOSI);
-            Configuration.SetPinFunction(LcdSck,  DeviceFunction.SPI1_CLOCK);
-            Configuration.SetPinFunction(-1,      DeviceFunction.SPI1_MISO);
+            // 2) Display. Pass CS as -1 so the SPI driver doesn't try to
+            // manage it — GPIO3 is a strapping pin on the ESP32-S3 and the
+            // nanoFramework SPI driver rejects it. We toggle CS manually as
+            // a plain GPIO instead, which is what M5Stack's reference does.
+            Configuration.SetPinFunction(LcdMosi, DeviceFunction.SPI2_MOSI);
+            Configuration.SetPinFunction(LcdSck,  DeviceFunction.SPI2_CLOCK);
+            Configuration.SetPinFunction(-1,      DeviceFunction.SPI2_MISO);
 
             GpioController gpio = new GpioController();
             GpioPin dc = gpio.OpenPin(LcdDc, PinMode.Output);
             dc.Write(PinValue.High);
+            GpioPin cs = gpio.OpenPin(LcdCs, PinMode.Output);
+            cs.Write(PinValue.Low); // hold CS low for the entire test
 
-            // ILI9342C accepts up to ~40 MHz, but starting at 10 MHz so we
-            // can prove the path before tuning. Default DataBitLength is 8.
-            SpiConnectionSettings spi = new SpiConnectionSettings(LcdSpiBus, LcdCs)
+            SpiConnectionSettings spi = new SpiConnectionSettings(LcdSpiBus, -1)
             {
                 ClockFrequency = 10_000_000,
                 Mode = SpiMode.Mode0
