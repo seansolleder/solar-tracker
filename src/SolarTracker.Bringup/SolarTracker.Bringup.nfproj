@@ -19,6 +19,19 @@
   <Import Project="$(NanoFrameworkProjectSystemPath)NFProjectSystem.props" Condition="Exists('$(NanoFrameworkProjectSystemPath)NFProjectSystem.props')" />
   <ItemGroup>
     <Compile Include="Program.cs" />
+    <!-- Linked from the main Device project so the bring-up uses identical drivers. -->
+    <Compile Include="..\SolarTracker.Device\Hardware\Axp2101.cs">
+      <Link>Hardware\Axp2101.cs</Link>
+    </Compile>
+    <Compile Include="..\SolarTracker.Device\Hardware\Display.cs">
+      <Link>Hardware\Display.cs</Link>
+    </Compile>
+    <Compile Include="..\SolarTracker.Device\Hardware\Font5x7.cs">
+      <Link>Hardware\Font5x7.cs</Link>
+    </Compile>
+    <Compile Include="..\SolarTracker.Device\Hardware\Touch.cs">
+      <Link>Hardware\Touch.cs</Link>
+    </Compile>
   </ItemGroup>
   <ItemGroup>
     <Reference Include="mscorlib">
